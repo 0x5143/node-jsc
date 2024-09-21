@@ -1,5 +1,7 @@
 # cocoscreatorjscdecrypt
+
 cocoscreator官方在编译的时候只给了加密的方法，而生成jsc之后没有进行解密的，这里给出一个开箱即用的方法。
+
 1. 安装nodejs
 2. npm install xxtea-node
    npm install pako
