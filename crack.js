@@ -18,6 +18,7 @@ var xxtea = require("xxtea-node");
 var FILEPATH = path.resolve('./../cn.isir.jz2/');
 var KEY = "18237418234-f3a3-4b"  //cocoscreator 的 工程加密key
 var UNZIP = true              //是否启用压缩
+var UNZIP = true            // 是否启用压缩
 
 //不带后缀的全路径名
 function getFullFileNameNoSuffix(fullFileName) {
