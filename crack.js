@@ -8,7 +8,7 @@ js......main.js.
 */
 
 const md5File = require('md5-file')
-
+const prettier = require('prettier');
 
 var fs = require("fs");
 var path = require("path")
@@ -33,33 +33,60 @@ function getFileMD5(filename) {
 }
 
 function xxteaDecode(filename) {
-    var data;
+    let data;
     try {
         data = fs.readFileSync(filename)
     } catch (error) {
         console.log("读取文件失败", filename);
         return
     }
-    var res = xxtea.decrypt(data, xxtea.toBytes(KEY))
+    let res = xxtea.decrypt(data, xxtea.toBytes(KEY));
     if (res == null) {
-        console.log("解密失败")
+        console.log("解密失败");
         return
     }
 
     if (UNZIP) {
-        console.log("开始解压", filename)
-        res = pako.ungzip(res)
+        console.log("开始解压", filename);
+        res = pako.ungzip(res);
     }
-    var newName = getFullFileNameNoSuffix(filename) + ".js"
+    
+    const newFilePath = getFullFileNameNoSuffix(filename) + ".js";
+    
+    // 使用Prettier格式化JS代码
+    // prettier.format(res, { parser: 'babel' })
+    //     .then((formatted) => {
+    //         // 将格式化后的代码异步写入文件
+    //         return fs.writeFile(newFilePath, formatted);
+    //     })
+    //     .then(() => {
+    //         console.log(newFilePath, "写入完毕");
+    //         //fs.unlinkSync(newFilePath)
+    //     })
+    //     .catch((err) => {
+    //         console.log(newFilePath, "写入出错" + err.message);
+    //     });
 
+    // // 将格式化后的代码异步写入文件
+    // let newName = getFullFileNameNoSuffix(filename) + ".js";
+    // fs.writeFile(newName, formatted, (err) => {
+    //    if (err) {
+    //        console.log(newName, "写入出错")
+    //    } else {
+    //        console.log("写入完毕:", newName)
+    //    }
+    // });
+    
     try {
-        fs.writeFileSync(newName, res)
+        fs.writeFileSync(newFilePath, res)
     } catch (error) {
-        console.log(newName, "写入出错")
+        console.log(newFilePath, "写入出错")
         return
     }
-    console.log("写入完毕:", newName)
 
+    console.log("写入完毕:", newFilePath)
+
+    formatFile(newFilePath);
 }
 
 function xxteaEncode(filename) {
@@ -117,7 +144,6 @@ function fileDisplay(filePath, op) {
                                 if (op == "d" && suffix == ".jsc") {
                                     console.log(filedir, "解密");
                                     xxteaDecode(filedir)
-                                    fs.unlinkSync(filedir)
                                 } else if (op == "e" && suffix == ".js") {
                                     console.log(filedir, "加密");
                                     xxteaEncode(filedir)
@@ -138,6 +164,28 @@ function fileDisplay(filePath, op) {
             });
         }
     });
+}
+
+async function formatFile(filePath) {
+    try {
+        // 异步读取文件内容，使用 await 等待 Promise 完成
+        const fileContent = fs.readFileSync(filePath, 'utf8');
+
+        // 确保传递的是字符串，而不是 Promise
+        const formatted = await prettier.format(fileContent, {
+            semi: true,
+            singleQuote: true,
+            trailingComma: 'es5',
+            tabWidth: 2,
+            parser: 'babel', // 指定解析器为 'babel'
+        });
+
+        // 异步写入格式化后的内容
+        fs.writeFileSync(filePath, formatted);
+        console.log(`格式化: ${filePath}.`);
+    } catch (error) {
+        console.error(`Error formatting file: ${filePath}`, error);
+    }
 }
 
 const [node, path0, ...argv] = process.argv;
