@@ -7,12 +7,12 @@ ter/jsb-builtin.
 js......main.js.
 */
 
-const md5File = require('md5-file')
+const md5File = require('md5-file');
 const prettier = require('prettier');
 
-var fs = require("fs");
-var path = require("path")
-var pako = require("pako")
+const fs = require("fs").promises;
+var path = require("path");
+var pako = require("pako");
 var xxtea = require("xxtea-node");
 
 var FILEPATH = path.resolve('./../cn.isir.jz2/');
@@ -32,10 +32,32 @@ function getFileMD5(filename) {
     return hash;
 }
 
-function xxteaDecode(filename) {
+async function formatFile(filePath) {
+    try {
+        // 异步读取文件内容，使用 await 等待 Promise 完成
+        const fileContent = await fs.readFile(filePath, 'utf8');
+
+        // 确保传递的是字符串，而不是 Promise
+        const formatted = await prettier.format(fileContent, {
+            semi: true,
+            singleQuote: true,
+            trailingComma: 'es5',
+            tabWidth: 2,
+            parser: 'babel', // 指定解析器为 'babel'
+        });
+
+        // 异步写入格式化后的内容
+        await fs.writeFile(filePath, formatted);
+        console.log(`格式化: ${filePath}`);
+    } catch (error) {
+        console.error(`Error formatting file: ${filePath}`, error);
+    }
+}
+
+async function xxteaDecode(filename) {
     let data;
     try {
-        data = fs.readFileSync(filename)
+        data = await fs.readFile(filename)
     } catch (error) {
         console.log("读取文件失败", filename);
         return
@@ -78,7 +100,7 @@ function xxteaDecode(filename) {
     // });
     
     try {
-        fs.writeFileSync(newFilePath, res)
+        await fs.writeFile(newFilePath, res)
     } catch (error) {
         console.log(newFilePath, "写入出错")
         return
@@ -86,13 +108,13 @@ function xxteaDecode(filename) {
 
     console.log("写入完毕:", newFilePath)
 
-    formatFile(newFilePath);
+    await formatFile(newFilePath);
 }
 
-function xxteaEncode(filename) {
+async function xxteaEncode(filename) {
     var data;
     try {
-        data = fs.readFileSync(filename)
+        data = await fs.readFile(filename)
     } catch (error) {
         console.log("读取文件失败", filename);
         return
@@ -111,7 +133,7 @@ function xxteaEncode(filename) {
     }
     var newName = getFullFileNameNoSuffix(filename) + ".jsc"
     try {
-        fs.writeFileSync(newName, res)
+        await fs.writeFile(newName, res)
     } catch (error) {
         console.log(newName, "写入出错")
         return
@@ -120,74 +142,25 @@ function xxteaEncode(filename) {
     //getFileMD5(newName){
 }
 
-//文件遍历方法
-function fileDisplay(filePath, op) {
-    //根据文件路径读取文件，返回文件列表
-    fs.readdir(filePath, function (err, files) {
-        if (err) {
-            console.warn(err)
-        } else {
-            //遍历读取到的文件列表
-            files.forEach(function (filename) {
-                //获取当前文件的绝对路径
-                var filedir = path.join(filePath, filename);
-                //根据文件路径获取文件信息，返回一个fs.Stats对象
-                fs.stat(filedir, function (eror, stats) {
-                    if (eror) {
-                        console.warn('获取文件stats失败');
-                    } else {
-                        var isFile = stats.isFile();//是文件
-                        var isDir = stats.isDirectory();//是文件夹
-                        if (isFile) {
-                            var suffix = path.extname(filedir);
-                            if (suffix == ".jsc" || suffix == ".js") {
-                                if (op == "d" && suffix == ".jsc") {
-                                    console.log(filedir, "解密");
-                                    xxteaDecode(filedir)
-                                } else if (op == "e" && suffix == ".js") {
-                                    console.log(filedir, "加密");
-                                    xxteaEncode(filedir)
-                                    fs.unlinkSync(filedir)
-                                } else {
-                                    console.log("invalid", filedir)
-                                }
-
-                            }
-
-                        }
-                        if (isDir) {
-                            //console.log("进入目录:",filedir)
-                            fileDisplay(filedir, op);//递归，如果是文件夹，就继续遍历该文件夹下面的文件
-                        }
-                    }
-                })
-            });
-        }
-    });
-}
-
-async function formatFile(filePath) {
+async function readDirectory(dirPath, op) {
     try {
-        // 异步读取文件内容，使用 await 等待 Promise 完成
-        const fileContent = fs.readFileSync(filePath, 'utf8');
-
-        // 确保传递的是字符串，而不是 Promise
-        const formatted = await prettier.format(fileContent, {
-            semi: true,
-            singleQuote: true,
-            trailingComma: 'es5',
-            tabWidth: 2,
-            parser: 'babel', // 指定解析器为 'babel'
-        });
-
-        // 异步写入格式化后的内容
-        fs.writeFileSync(filePath, formatted);
-        console.log(`格式化: ${filePath}.`);
-    } catch (error) {
-        console.error(`Error formatting file: ${filePath}`, error);
+        const files = await fs.readdir(dirPath, { withFileTypes: true });
+        
+        for (const file of files) {
+            const filePath = path.join(dirPath, file.name);
+            if (file.isDirectory()) {
+                await readDirectory(filePath, op); // 递归调用
+            } else if (op === 'd' && path.extname(file.name) === '.jsc') {
+                await xxteaDecode(filePath);
+            } else if (op === 'e' && path.extname(file.name) === '.js') {
+                await xxteaEncode(filePath);
+            }
+        }
+    } catch (err) {
+        console.error('目录遍历出错:', err.message);
     }
 }
 
 const [node, path0, ...argv] = process.argv;
 var op = argv[0]
-fileDisplay(FILEPATH, op);
+readDirectory(FILEPATH, op);
