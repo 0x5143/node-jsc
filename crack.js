@@ -32,83 +32,81 @@ function getFileMD5(filename) {
     return hash;
 }
 
-async function formatFile(filePath) {
-    try {
-        // 异步读取文件内容，使用 await 等待 Promise 完成
-        const fileContent = await fs.readFile(filePath, 'utf8');
+async function decodeJSC(srcFilePath) {
+    let data = await fs.readFile(srcFilePath)
+    if (data == null) {
+        console.error('加载文件失败:', srcFilePath);
+        return;
+    }
+    
+    let res = xxtea.decrypt(data, xxtea.toBytes(KEY));
+    if (res == null) {
+        console.log('解密文件失败:', srcFilePath);
+        return
+    }
 
-        // 确保传递的是字符串，而不是 Promise
-        const formatted = await prettier.format(fileContent, {
+    if (UNZIP) {
+        console.log('开始解压:', srcFilePath);
+        res = pako.ungzip(res);
+    }
+
+    // 确保传递的是字符串，而不是 Promise
+    let formatted;
+    try {
+        formatted = await prettier.format(new TextDecoder('utf-8').decode(res), {
             semi: true,
             singleQuote: true,
             trailingComma: 'es5',
             tabWidth: 2,
             parser: 'babel', // 指定解析器为 'babel'
         });
-
-        // 异步写入格式化后的内容
-        await fs.writeFile(filePath, formatted);
-        console.log(`格式化: ${filePath}`);
-    } catch (error) {
-        console.error(`Error formatting file: ${filePath}`, error);
+    } catch (err) {
+        console.error('格式化文件时出错:', srcFilePath, err.message);
+        return;
     }
+    
+    const tarFilePath = getFullFileNameNoSuffix(srcFilePath) + ".js";
+    
+    try {
+        await fs.writeFile(tarFilePath, formatted)
+    } catch (err) {
+        console.error('写入文件失败:', tarFilePath, err.message)
+        return
+    }
+
+    console.log("写入完毕:", tarFilePath)
 }
 
-async function xxteaDecode(filename) {
-    let data;
+async function decodeJSON(srcFilePath) {
     try {
-        data = await fs.readFile(filename)
-    } catch (error) {
-        console.log("读取文件失败", filename);
-        return
-    }
-    let res = xxtea.decrypt(data, xxtea.toBytes(KEY));
-    if (res == null) {
-        console.log("解密失败");
-        return
-    }
+        // 读取文件并解析
+        const data = JSON.parse(await fs.readFile(srcFilePath, 'utf8'));
 
-    if (UNZIP) {
-        console.log("开始解压", filename);
-        res = pako.ungzip(res);
+        // 校验文件的结构
+        if (!Array.isArray(data) || data.length !== 11) {
+            //console.log('跳过: 格式不匹配1,', srcFilePath);
+            return;
+        }
+
+        // 提取出字段结构
+        const structure = data[3];  // 假设第 4 个元素是结构描述部分
+        if (!Array.isArray(structure) || structure.length === 0 || !Array.isArray(structure[0]) || structure[0][0] !== 'cc.TextAsset' || !Array.isArray(structure[0][1]) || structure[0][1].length !== 2 || structure[0][1][0] !== '_name' || structure[0][1][1] !== 'text') {
+            //console.log('跳过: 格式不匹配2,', srcFilePath);
+            return;
+        }
+        
+        console.log('解析json:', srcFilePath);
+
+        const csvFilePath = getFullFileNameNoSuffix(srcFilePath) + '.' + data[5][0][1] + '.csv';
+        const csvFileContent = data[5][0][2].replace(/\\r\\n/g, '\n');
+        
+        await fs.writeFile(csvFilePath, csvFileContent, 'utf8');
+        
+        // 删除旧的JSON文件
+        await fs.unlink(srcFilePath);
+    } catch (err) {
+        console.error('解析json文件时出错', err.message);
     }
-    
-    const newFilePath = getFullFileNameNoSuffix(filename) + ".js";
-    
-    // 使用Prettier格式化JS代码
-    // prettier.format(res, { parser: 'babel' })
-    //     .then((formatted) => {
-    //         // 将格式化后的代码异步写入文件
-    //         return fs.writeFile(newFilePath, formatted);
-    //     })
-    //     .then(() => {
-    //         console.log(newFilePath, "写入完毕");
-    //         //fs.unlinkSync(newFilePath)
-    //     })
-    //     .catch((err) => {
-    //         console.log(newFilePath, "写入出错" + err.message);
-    //     });
-
-    // // 将格式化后的代码异步写入文件
-    // let newName = getFullFileNameNoSuffix(filename) + ".js";
-    // fs.writeFile(newName, formatted, (err) => {
-    //    if (err) {
-    //        console.log(newName, "写入出错")
-    //    } else {
-    //        console.log("写入完毕:", newName)
-    //    }
-    // });
-    
-    try {
-        await fs.writeFile(newFilePath, res)
-    } catch (error) {
-        console.log(newFilePath, "写入出错")
-        return
-    }
-
-    console.log("写入完毕:", newFilePath)
-
-    await formatFile(newFilePath);
 }
 
 async function xxteaEncode(filename) {
@@ -138,8 +136,36 @@ async function xxteaEncode(filename) {
         console.log(newName, "写入出错")
         return
     }
-    console.log("写入完毕:", newName)
-    //getFileMD5(newName){
+    console.log("写入完毕:", newName);
+}
+
+async function encodeCSV(srcFilePath) {
+    const content = await fs.readFile(srcFilePath, 'utf-8');
+
+    // 从文件名中提取 xyz 部分
+    const lastDotIndex = srcFilePath.lastIndexOf('.'); // 找到最后一个 .
+    const secondLastDotIndex = srcFilePath.lastIndexOf('.', lastDotIndex - 1); // 找到倒数第二个 .
+
+    // 提取倒数第二个和倒数第一个之间的部分
+    const xyz = secondLastDotIndex !== -1 ? srcFilePath.slice(secondLastDotIndex + 1, lastDotIndex) : 'default';
+    
+    // 构造原始的自定义数据结构
+    const customData = [
+        1, 0, 0,
+        [["cc.TextAsset", ["_name", "text"], 1]], // 结构描述
+        [[0, 0, 1, 3]],                         // 元数据映射
+        [[0,xyz,content.replace(/\r?\n/g, '\r\n')]],// 实际数据 (从 CSV 提取的)
+        0, 0, [], [], []
+    ];
+
+    // 写回 JSON 文件
+    const outputFilePath = srcFilePath.replace(`.${xyz}.csv`, '.json');
+    await fs.writeFile(outputFilePath, JSON.stringify(customData));
+    
+    console.log('写入成功:', outputFilePath);
+
+    // 删除旧的 CSV 文件
+    await fs.unlink(srcFilePath);
 }
 
 async function readDirectory(dirPath, op) {
@@ -151,9 +177,13 @@ async function readDirectory(dirPath, op) {
             if (file.isDirectory()) {
                 await readDirectory(filePath, op); // 递归调用
             } else if (op === 'd' && path.extname(file.name) === '.jsc') {
-                await xxteaDecode(filePath);
+                await decodeJSC(filePath);
             } else if (op === 'e' && path.extname(file.name) === '.js') {
                 await xxteaEncode(filePath);
+            } else if (op === 'd' && path.extname(file.name) === '.json') {
+                await decodeJSON(filePath);
+            } else if (op === 'e' && path.extname(file.name) === '.csv') {
+                await encodeCSV(filePath);
             }
         }
     } catch (err) {
