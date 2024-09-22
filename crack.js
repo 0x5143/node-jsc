@@ -96,8 +96,13 @@ async function decodeJSON(srcFilePath) {
         }
         
         console.log('解析json:', srcFilePath);
-
-        const csvFilePath = getFullFileNameNoSuffix(srcFilePath) + '.' + data[5][0][1] + '.csv';
+        
+        // 获取文件名（不带路径和后缀）
+        const fileNameWithExtension = path.basename(srcFilePath);
+        const fileName = path.parse(fileNameWithExtension).name;
+        
+        // 获取文件名的前两个字符
+        const csvFilePath = srcFilePath.replace(`${fileName.slice(0, 2)}\\${fileName}.json`, `${data[5][0][1]}.${fileName}.csv`);
         const csvFileContent = data[5][0][2].replace(/\\r\\n/g, '\n');
         
         await fs.writeFile(csvFilePath, csvFileContent, 'utf8');
@@ -142,24 +147,24 @@ async function xxteaEncode(filename) {
 async function encodeCSV(srcFilePath) {
     const content = await fs.readFile(srcFilePath, 'utf-8');
 
-    // 从文件名中提取 xyz 部分
-    const lastDotIndex = srcFilePath.lastIndexOf('.'); // 找到最后一个 .
-    const secondLastDotIndex = srcFilePath.lastIndexOf('.', lastDotIndex - 1); // 找到倒数第二个 .
+    // 获取文件名（不带路径和后缀）
+    const srcFileNameWithExtension = path.basename(srcFilePath);
+    const srcFileName = path.parse(srcFileNameWithExtension).name;
 
-    // 提取倒数第二个和倒数第一个之间的部分
-    const xyz = secondLastDotIndex !== -1 ? srcFilePath.slice(secondLastDotIndex + 1, lastDotIndex) : 'default';
+    // 提取新的文件名中的部分
+    const [prefix, oldFileName] = srcFileName.split('.');
     
     // 构造原始的自定义数据结构
     const customData = [
         1, 0, 0,
         [["cc.TextAsset", ["_name", "text"], 1]], // 结构描述
         [[0, 0, 1, 3]],                         // 元数据映射
-        [[0,xyz,content.replace(/\r?\n/g, '\r\n')]],// 实际数据 (从 CSV 提取的)
+        [[0,prefix,content.replace(/\r?\n/g, '\r\n')]],// 实际数据 (从 CSV 提取的)
         0, 0, [], [], []
     ];
-
+    
     // 写回 JSON 文件
-    const outputFilePath = srcFilePath.replace(`.${xyz}.csv`, '.json');
+    const outputFilePath = srcFilePath.replace(`${prefix}.${oldFileName}.csv`, `${oldFileName.slice(0, 2)}\\${oldFileName}.json`);
     await fs.writeFile(outputFilePath, JSON.stringify(customData));
     
     console.log('写入成功:', outputFilePath);
