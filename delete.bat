@@ -1,7 +1,7 @@
 @echo off
 set "target_dir=C:\Users\huangqc\AppData\Local\Google\AndroidStudio2024.1\device-explorer\Xiaomi 2206122SC\_\data\data\com.jg.hxmjl\files"
 set "ignore_dirs=.idea .git"
-set "extensions=*.bin *.mp4 *.png *.astc *.atlas *.mp3 *.ttf *.manifest *.pem"
+set "extensions=*.bin *.mp4 *.png *.astc *.atlas *.mp3 *.ttf *.manifest *.pem *.plist"
 
 echo Deleting files in %target_dir% with extensions: %extensions%
 
